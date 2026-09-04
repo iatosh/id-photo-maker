@@ -157,7 +157,11 @@ export function bitmapToImage(bitmap: ImageBitmap): Promise<HTMLImageElement> {
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('2D canvas context not available')
   ctx.drawImage(bitmap, 0, 0)
+  return canvasToImageElement(canvas)
+}
 
+/** Canvas の内容を <img> 要素化する（Object URL 経由） */
+export function canvasToImageElement(canvas: HTMLCanvasElement): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) return reject(new Error('toBlob failed'))

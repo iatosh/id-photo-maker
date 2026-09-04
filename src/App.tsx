@@ -1,13 +1,16 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Area, Point } from 'react-easy-crop'
+import { BackgroundPanel } from '@/components/BackgroundPanel'
 import { Button } from '@/components/ui/button'
 import { Controls } from '@/components/Controls'
 import { CropPane } from '@/components/CropPane'
 import { ImageUpload } from '@/components/ImageUpload'
 import { Sheet } from '@/components/Sheet'
+import { replaceBackground } from '@/lib/background'
 import { type FaceBox, detectFaceBox } from '@/lib/faceDetect'
 import { CUSTOM_PRESET_ID, PRESETS, type Preset, autoCropBox } from '@/lib/layout'
 import { bitmapToImage, type CroppedAreaPixels, loadImageBitmap } from '@/lib/render'
+import { type SegmentationMask, detectPersonMask } from '@/lib/segment'
 
 const DEFAULT_CUSTOM: Preset = {
   id: CUSTOM_PRESET_ID,
@@ -19,7 +22,10 @@ const DEFAULT_CUSTOM: Preset = {
 }
 
 function App() {
-  const [image, setImage] = useState<HTMLImageElement | null>(null)
+  // sourceImage: アップロードされたまま(EXIF補正のみ)、常に不変。顔検出/背景検出の入力に使う
+  // workingImage: 実際にクロップ/プレビューへ渡す画像。背景色を変えるとこちらだけ差し替わる
+  const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null)
+  const [workingImage, setWorkingImage] = useState<HTMLImageElement | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const [presetId, setPresetId] = useState(PRESETS[0].id)
@@ -38,6 +44,12 @@ function App() {
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
 
+  const [bgColor, setBgColor] = useState<string | null>(null)
+  const [bgProcessing, setBgProcessing] = useState(false)
+  const [bgError, setBgError] = useState<string | null>(null)
+  // 同じ画像に対して色を切り替えるたびに検出をやり直さないためのキャッシュ
+  const maskCacheRef = useRef<{ image: HTMLImageElement; mask: SegmentationMask } | null>(null)
+
   const preset: Preset =
     presetId === CUSTOM_PRESET_ID
       ? {
@@ -52,10 +64,14 @@ function App() {
   const handleSelect = async (file: File) => {
     setError(null)
     setDetectError(null)
+    setBgError(null)
     try {
       const bitmap = await loadImageBitmap(file)
       const img = await bitmapToImage(bitmap)
-      setImage(img)
+      setSourceImage(img)
+      setWorkingImage(img)
+      setBgColor(null)
+      maskCacheRef.current = null
       setFaceBox(null)
       setCrop({ x: 0, y: 0 })
       setZoom(1)
@@ -82,8 +98,8 @@ function App() {
         : (PRESETS.find((p) => p.id === id) ?? PRESETS[0])
 
     // 顔検出済みなら新しい規格でも自動配置を引き継ぐ
-    if (faceBox && image) {
-      const box = autoCropBox(faceBox, nextPreset, image.naturalWidth, image.naturalHeight)
+    if (faceBox && sourceImage) {
+      const box = autoCropBox(faceBox, nextPreset, sourceImage.naturalWidth, sourceImage.naturalHeight)
       setInitialCrop(box)
       setDetectError(
         box.fits ? null : '顔が大きく、この規格が求める余白を完全には確保できませんでした。手動で調整してください。',
@@ -98,17 +114,17 @@ function App() {
   }
 
   const handleAutoCrop = async () => {
-    if (!image) return
+    if (!sourceImage) return
     setDetecting(true)
     setDetectError(null)
     try {
-      const face = await detectFaceBox(image)
+      const face = await detectFaceBox(sourceImage)
       if (!face) {
         setDetectError('顔を検出できませんでした。手動で調整してください。')
         return
       }
       setFaceBox(face)
-      const box = autoCropBox(face, preset, image.naturalWidth, image.naturalHeight)
+      const box = autoCropBox(face, preset, sourceImage.naturalWidth, sourceImage.naturalHeight)
       setInitialCrop(box)
       setDetectError(
         box.fits ? null : '顔が大きく、この規格が求める余白を完全には確保できませんでした。手動で調整してください。',
@@ -118,6 +134,35 @@ function App() {
       setDetectError('顔検出に失敗しました（通信環境をご確認ください）。手動で調整してください。')
     } finally {
       setDetecting(false)
+    }
+  }
+
+  const handleBgColorChange = async (color: string | null) => {
+    if (!sourceImage) return
+    setBgError(null)
+
+    if (color === null) {
+      setWorkingImage(sourceImage)
+      setBgColor(null)
+      return
+    }
+
+    setBgProcessing(true)
+    try {
+      if (!maskCacheRef.current || maskCacheRef.current.image !== sourceImage) {
+        const mask = await detectPersonMask(sourceImage)
+        maskCacheRef.current = { image: sourceImage, mask }
+      }
+      const replaced = await replaceBackground(sourceImage, maskCacheRef.current.mask, color)
+      // 画像サイズ(px)は元と同じなので crop/zoom/rotation はリセット不要
+      setWorkingImage(replaced)
+      setBgColor(color)
+    } catch {
+      setBgError('背景の処理に失敗しました（通信環境をご確認ください）。元の画像のまま使用します。')
+      setWorkingImage(sourceImage)
+      setBgColor(null)
+    } finally {
+      setBgProcessing(false)
     }
   }
 
@@ -136,13 +181,13 @@ function App() {
         </p>
       )}
 
-      {!image ? (
+      {!workingImage ? (
         <ImageUpload onSelect={handleSelect} />
       ) : (
         <div className="grid gap-8 md:grid-cols-2">
           <div className="flex flex-col items-center gap-3">
             <CropPane
-              imageSrc={image.src}
+              imageSrc={workingImage.src}
               preset={preset}
               crop={crop}
               zoom={zoom}
@@ -177,13 +222,19 @@ function App() {
               preset={preset}
               cropWidthPx={croppedAreaPixels?.width ?? null}
             />
-            <Sheet image={image} croppedAreaPixels={croppedAreaPixels} rotation={rotation} preset={preset} />
+            <BackgroundPanel
+              color={bgColor}
+              onColorChange={handleBgColorChange}
+              processing={bgProcessing}
+              error={bgError}
+            />
+            <Sheet image={workingImage} croppedAreaPixels={croppedAreaPixels} rotation={rotation} preset={preset} />
           </div>
         </div>
       )}
 
       <footer className="text-muted-foreground mt-auto pt-8 text-xs">
-        画像は端末内で処理され、サーバーに送信されません（顔検出モデルの初回取得のみ通信が発生します）。
+        画像は端末内で処理され、サーバーに送信されません（検出モデルの初回取得のみ通信が発生します）。
       </footer>
     </div>
   )
