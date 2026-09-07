@@ -1,32 +1,31 @@
-# React + TypeScript + Vite
+# 証明写真メーカー
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+画像をアップロードして、コンビニのマルチコピー機で **L判プリント**（89×127mm・写真用紙・約30円）できる証明写真シートを作るブラウザアプリ。すべてブラウザ内で処理し、画像はサーバーに送信しません。
 
-Currently, two official plugins are available:
+<!-- screenshot: docs/screenshot.png -->
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 特徴
 
-## React Compiler
+- 履歴書・パスポート・マイナンバー・運転免許・米国ビザなど主要規格＋カスタムサイズ
+- 手動クロップ（規格ごとの頭頂・顎ガイド線付き）
+- MediaPipe Face Landmarker による自動配置（任意）
+- MediaPipe Image Segmenter による背景色変更（白・薄い青・薄いグレー・カスタム、任意）
+- L判へ隙間2mm込みで自動タイリング、カットガイド線付き
+- 600dpi・高画質JPEG出力、Web Share / ダウンロードで保存
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 使い方
 
-## Expanding the Oxlint configuration
+1. 「顔検出で自動配置」または手動でドラッグ・ピンチしてクロップ
+2. 必要なら背景色を変更
+3. 保存してコンビニのマルチコピー機で「写真プリント」→ L判 → ふちなしで印刷
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## 開発
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
+npm test
+npm run build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Vite + React + TypeScript + Tailwind CSS v4 + shadcn/ui + react-easy-crop。
