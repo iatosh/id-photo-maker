@@ -45,6 +45,7 @@ export function CropPane({
         zoom={zoom}
         rotation={rotation}
         aspect={preset.w / preset.h}
+        objectFit="cover"
         initialCroppedAreaPixels={initialCroppedAreaPixels}
         onCropChange={onCropChange}
         onZoomChange={onZoomChange}
@@ -52,7 +53,10 @@ export function CropPane({
         onCropComplete={(_area, areaPixels) => onCropComplete(areaPixels)}
       />
       {/* コンテナのアスペクト比を preset に固定しているので、
-          react-easy-crop のクロップ枠はコンテナいっぱいに一致する */}
+          react-easy-crop のクロップ枠はコンテナいっぱいに一致する。
+          objectFit="cover" 必須: デフォルトの "contain" だと写真の縦横比が
+          規格と違う場合にコンテナ内へ空白ができ、クロップ枠がコンテナより
+          小さく表示されてガイド線とズレる */}
       <GuideOverlay top={top} chin={chin} />
     </div>
   )
