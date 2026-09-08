@@ -1,23 +1,53 @@
-// 画像の外周から同色領域を塗りつぶして背景を推定する（ペイントツールの
-// 「隣接ピクセルを選択」と同じアルゴリズム）。DOM非依存の純粋なピクセル配列処理。
+// 画像の外周から背景を推定する。DOM非依存の純粋なピクセル配列処理。
 
 export type FloodFillOptions = {
   width: number
   height: number
   /** RGBA、長さ width*height*4 */
   pixels: Uint8ClampedArray
-  /** 隣接ピクセルとのRGB差の合計がこれ以下なら同じ背景とみなす */
+  /** 基準背景色とのRGB差の合計がこれ以下なら背景とみなす */
   tolerance: number
 }
 
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.floor(sorted.length / 2)]
+}
+
+/** 外周ピクセルの中央値を背景の基準色とする（外れ値・少量の前景写り込みに強い） */
+function estimateBorderColor(pixels: Uint8ClampedArray, width: number, height: number): [number, number, number] {
+  const rs: number[] = []
+  const gs: number[] = []
+  const bs: number[] = []
+  const sample = (idx: number) => {
+    const o = idx * 4
+    rs.push(pixels[o])
+    gs.push(pixels[o + 1])
+    bs.push(pixels[o + 2])
+  }
+  for (let x = 0; x < width; x++) {
+    sample(x)
+    sample((height - 1) * width + x)
+  }
+  for (let y = 0; y < height; y++) {
+    sample(y * width)
+    sample(y * width + width - 1)
+  }
+  return [median(rs), median(gs), median(bs)]
+}
+
 /**
- * 判定は「元の背景色」ではなく常に直前に確定した隣接ピクセルとの差分で
- * 伝播させる（ローカル許容）。そのため背景に軽いグラデーションや影が
- * あっても、境界を越えて一気に閾値を超えない限り塗りつぶしが続く。
+ * 外周から推定した基準背景色を、BFSで連結した範囲にだけ広げて背景を判定する。
+ * 判定は常に「直前の隣接ピクセル」ではなく「固定の基準背景色」との差分で行う。
+ * 直前ピクセルとの差分で伝播させる方式（グラデーション追従を狙った初期実装）は、
+ * 写真の滑らかな明暗変化を小刻みに辿って顔の肌にまで浸食する事故を起こしたため
+ * 採用していない。基準を固定することで、経由する距離に関わらず基準色から
+ * 大きく外れた領域（肌など）へは広がらない。
+ * 軽い影程度のムラは tolerance の範囲内で許容される。
  *
- * 既知の制約: 背景と同色の領域が人物の内側にあり、かつ外周とピクセル
- * 経路でつながっていない場合（例: 腕と胴の間の隙間）はそこだけ
- * 背景と判定されない。顔・肩中心の証明写真の構図ではまず起きない。
+ * 既知の制約: 背景と同色の領域が人物の内側にあり外周と非連結の場合
+ * （腕と胴の隙間など）はそこだけ背景と判定されない。顔・肩中心の
+ * 証明写真の構図ではまず起きない。
  *
  * 戻り値: 1 = 背景, 0 = 前景（インデックスは y*width+x）
  */
@@ -27,37 +57,26 @@ export function floodFillFromBorder({ width, height, pixels, tolerance }: FloodF
   const queue = new Int32Array(size)
   let tail = 0
 
-  const colorDist = (i: number, j: number): number => {
-    const oi = i * 4
-    const oj = j * 4
-    return (
-      Math.abs(pixels[oi] - pixels[oj]) +
-      Math.abs(pixels[oi + 1] - pixels[oj + 1]) +
-      Math.abs(pixels[oi + 2] - pixels[oj + 2])
-    )
+  const [refR, refG, refB] = estimateBorderColor(pixels, width, height)
+  const closeToRef = (idx: number): boolean => {
+    const o = idx * 4
+    return Math.abs(pixels[o] - refR) + Math.abs(pixels[o + 1] - refG) + Math.abs(pixels[o + 2] - refB) <= tolerance
   }
 
-  const seed = (idx: number) => {
-    if (!isBackground[idx]) {
+  const visit = (idx: number) => {
+    if (!isBackground[idx] && closeToRef(idx)) {
       isBackground[idx] = 1
       queue[tail++] = idx
     }
   }
 
   for (let x = 0; x < width; x++) {
-    seed(x)
-    seed((height - 1) * width + x)
+    visit(x)
+    visit((height - 1) * width + x)
   }
   for (let y = 0; y < height; y++) {
-    seed(y * width)
-    seed(y * width + width - 1)
-  }
-
-  const expand = (from: number, to: number) => {
-    if (!isBackground[to] && colorDist(from, to) <= tolerance) {
-      isBackground[to] = 1
-      queue[tail++] = to
-    }
+    visit(y * width)
+    visit(y * width + width - 1)
   }
 
   let head = 0
@@ -66,10 +85,10 @@ export function floodFillFromBorder({ width, height, pixels, tolerance }: FloodF
     const x = idx % width
     const y = (idx / width) | 0
 
-    if (x > 0) expand(idx, idx - 1)
-    if (x < width - 1) expand(idx, idx + 1)
-    if (y > 0) expand(idx, idx - width)
-    if (y < height - 1) expand(idx, idx + width)
+    if (x > 0) visit(idx - 1)
+    if (x < width - 1) visit(idx + 1)
+    if (y > 0) visit(idx - width)
+    if (y < height - 1) visit(idx + width)
   }
 
   return isBackground

@@ -35,9 +35,9 @@ describe('floodFillFromBorder', () => {
     }
   })
 
-  it('背景の緩やかなグラデーション(影)には局所許容度で追従する', () => {
+  it('背景の緩やかなグラデーション(影)は基準色からの範囲内なら背景と判定する', () => {
     // 横方向に1pxごとRGBが3ずつ変化する背景(0列目=200, 9列目=227)。
-    // 隣接差3 <= tolerance5 なので全体が連続して背景と判定される
+    // 外周の中央値(≈213付近)からの差はどの列も tolerance45 の範囲内
     const width = 10
     const height = 3
     const pixels = makeSolidImage(width, height, [200, 200, 200])
@@ -48,9 +48,33 @@ describe('floodFillFromBorder', () => {
       }
     }
 
-    const mask = floodFillFromBorder({ width, height, pixels, tolerance: 5 })
+    const mask = floodFillFromBorder({ width, height, pixels, tolerance: 45 })
 
     expect(mask.every((v) => v === 1)).toBe(true)
+  })
+
+  it('回帰テスト: 背景から前景へなだらかに変化する経路があっても、離れた色までは浸食しない', () => {
+    // かつての実装は「直前の隣接ピクセルとの差分」で判定を伝播させていたため、
+    // 1px刻みの小さな変化が積み重なって最終的に背景から遠い色(肌など)まで
+    // 背景と誤判定する事故があった。基準色を固定したことでこれを防いでいる。
+    // 外周は純粋な背景色のまま保ち、内側の行だけにグラデーションを置く
+    // （基準色のサンプルがグラデーションで汚染されないようにするため）。
+    const width = 40
+    const height = 10
+    const pixels = makeSolidImage(width, height, [240, 240, 240])
+    for (let y = 3; y <= 6; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        // 240(背景)から120台(肌のように離れた色)まで1pxごと3ずつ変化する
+        const v = 240 - (x - 1) * 3
+        setPixel(pixels, width, x, y, [v, v, v])
+      }
+    }
+
+    const mask = floodFillFromBorder({ width, height, pixels, tolerance: 45 })
+
+    // グラデーション始点付近(背景に近い色)は背景、終点付近(離れた色)は前景のまま
+    expect(mask[4 * width + 1]).toBe(1)
+    expect(mask[4 * width + (width - 2)]).toBe(0)
   })
 
   it('外周から遠く離れた色は背景に取り込まれない（急激な差はtoleranceで止まる）', () => {
