@@ -1,54 +1,73 @@
+import { floodFillFromBorder } from './floodFill'
 import { canvasToImageElement } from './render'
-import { BACKGROUND_CATEGORY, type SegmentationMask } from './segment'
+
+// フラッドフィル計算用の作業解像度の上限。大きすぎると遅く、
+// 小さすぎると細かい輪郭（髪の隙間など）を取りこぼす
+const WORK_MAX_DIMENSION = 900
+
+// 隣接ピクセルとのRGB差の合計の許容値。上げるほど影・多少の色ムラを
+// 背景として許容するが、背景に近い色の前景（明るい服など）を
+// 誤って削る可能性も上がる
+const COLOR_TOLERANCE = 36
 
 /**
- * 検出した人物マスクを使って画像の背景を単色に置き換える。
- * モデル出力(256x256程度)を等倍描画すると輪郭がブロック状にギザギザになるため、
- * ブラウザのバイリニア拡大 + 軽いぼかしでアルファマットを作り、
- * Canvas合成(source-in)で切り抜いてから背景色の上に重ねる。
- * 手動ピクセルループより高速で、輪郭も自然になる。
+ * 無地の背景（影や同系色のムラはあり得る想定）を前提に、画像の外周から
+ * 同色領域をフラッドフィルして背景を推定し、単色に置き換える。
+ * 機械学習モデルを使わず画像そのものから直接読み取るため、通信不要で
+ * 輪郭を実際のピクセル単位で追従できる（floodFillFromBorder 参照）。
  */
-export async function replaceBackground(
-  image: HTMLImageElement,
-  mask: SegmentationMask,
-  colorHex: string,
-): Promise<HTMLImageElement> {
+export async function replaceBackground(image: HTMLImageElement, colorHex: string): Promise<HTMLImageElement> {
   const w = image.naturalWidth
   const h = image.naturalHeight
+  const scale = Math.min(1, WORK_MAX_DIMENSION / Math.max(w, h))
+  const workW = Math.max(1, Math.round(w * scale))
+  const workH = Math.max(1, Math.round(h * scale))
 
-  // 1. モデル解像度のアルファマスク（前景=不透明、背景=透明）を作る
-  const smallMask = document.createElement('canvas')
-  smallMask.width = mask.width
-  smallMask.height = mask.height
-  const smallCtx = smallMask.getContext('2d')
-  if (!smallCtx) throw new Error('2D canvas context not available')
-  const maskData = smallCtx.createImageData(mask.width, mask.height)
-  for (let i = 0; i < mask.data.length; i++) {
-    const isForeground = mask.data[i] !== BACKGROUND_CATEGORY
+  const workCanvas = document.createElement('canvas')
+  workCanvas.width = workW
+  workCanvas.height = workH
+  const workCtx = workCanvas.getContext('2d')
+  if (!workCtx) throw new Error('2D canvas context not available')
+  workCtx.drawImage(image, 0, 0, workW, workH)
+  const { data } = workCtx.getImageData(0, 0, workW, workH)
+
+  const isBackground = floodFillFromBorder({
+    width: workW,
+    height: workH,
+    pixels: data,
+    tolerance: COLOR_TOLERANCE,
+  })
+
+  // 前景=不透明、背景=透明のアルファマスクを作る（作業解像度のまま）
+  const maskCanvas = document.createElement('canvas')
+  maskCanvas.width = workW
+  maskCanvas.height = workH
+  const maskCtx = maskCanvas.getContext('2d')
+  if (!maskCtx) throw new Error('2D canvas context not available')
+  const maskImageData = maskCtx.createImageData(workW, workH)
+  for (let i = 0; i < isBackground.length; i++) {
     const o = i * 4
-    maskData.data[o] = 255
-    maskData.data[o + 1] = 255
-    maskData.data[o + 2] = 255
-    maskData.data[o + 3] = isForeground ? 255 : 0
+    maskImageData.data[o] = 255
+    maskImageData.data[o + 1] = 255
+    maskImageData.data[o + 2] = 255
+    maskImageData.data[o + 3] = isBackground[i] ? 0 : 255
   }
-  smallCtx.putImageData(maskData, 0, 0)
+  maskCtx.putImageData(maskImageData, 0, 0)
 
-  // 2. 元画像サイズへ拡大しながら描く（ブラウザのバイリニア補間で輪郭が滑らかになる）
-  //    + 軽くぼかして生え際のギザギザをさらに和らげる
+  // 元画像サイズへ拡大しながら描く（ブラウザのバイリニア補間 + 軽いぼかしで
+  // 輪郭のジャギーを和らげる）→ その不透明部分にだけ元画像を残す
   const cutout = document.createElement('canvas')
   cutout.width = w
   cutout.height = h
   const cutoutCtx = cutout.getContext('2d')
   if (!cutoutCtx) throw new Error('2D canvas context not available')
-  cutoutCtx.filter = 'blur(3px)'
-  cutoutCtx.drawImage(smallMask, 0, 0, mask.width, mask.height, 0, 0, w, h)
+  cutoutCtx.filter = 'blur(2px)'
+  cutoutCtx.drawImage(maskCanvas, 0, 0, workW, workH, 0, 0, w, h)
   cutoutCtx.filter = 'none'
-
-  // 3. マスクの不透明な部分にだけ元画像を残す（前景の切り抜き）
   cutoutCtx.globalCompositeOperation = 'source-in'
   cutoutCtx.drawImage(image, 0, 0, w, h)
 
-  // 4. 背景色を敷いた上に切り抜きを重ねる
+  // 背景色を敷いた上に切り抜きを重ねる
   const out = document.createElement('canvas')
   out.width = w
   out.height = h

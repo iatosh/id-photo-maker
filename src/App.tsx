@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import type { Area, Point } from 'react-easy-crop'
 import { BackgroundPanel } from '@/components/BackgroundPanel'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,6 @@ import { replaceBackground } from '@/lib/background'
 import { type FaceBox, detectFaceBox } from '@/lib/faceDetect'
 import { CUSTOM_PRESET_ID, PRESETS, type Preset, autoCropBox } from '@/lib/layout'
 import { bitmapToImage, type CroppedAreaPixels, loadImageBitmap } from '@/lib/render'
-import { type SegmentationMask, detectPersonMask } from '@/lib/segment'
 
 const DEFAULT_CUSTOM: Preset = {
   id: CUSTOM_PRESET_ID,
@@ -47,8 +46,6 @@ function App() {
   const [bgColor, setBgColor] = useState<string | null>(null)
   const [bgProcessing, setBgProcessing] = useState(false)
   const [bgError, setBgError] = useState<string | null>(null)
-  // 同じ画像に対して色を切り替えるたびに検出をやり直さないためのキャッシュ
-  const maskCacheRef = useRef<{ image: HTMLImageElement; mask: SegmentationMask } | null>(null)
 
   const preset: Preset =
     presetId === CUSTOM_PRESET_ID
@@ -71,7 +68,6 @@ function App() {
       setSourceImage(img)
       setWorkingImage(img)
       setBgColor(null)
-      maskCacheRef.current = null
       setFaceBox(null)
       setCrop({ x: 0, y: 0 })
       setZoom(1)
@@ -149,16 +145,12 @@ function App() {
 
     setBgProcessing(true)
     try {
-      if (!maskCacheRef.current || maskCacheRef.current.image !== sourceImage) {
-        const mask = await detectPersonMask(sourceImage)
-        maskCacheRef.current = { image: sourceImage, mask }
-      }
-      const replaced = await replaceBackground(sourceImage, maskCacheRef.current.mask, color)
+      const replaced = await replaceBackground(sourceImage, color)
       // 画像サイズ(px)は元と同じなので crop/zoom/rotation はリセット不要
       setWorkingImage(replaced)
       setBgColor(color)
     } catch {
-      setBgError('背景の処理に失敗しました（通信環境をご確認ください）。元の画像のまま使用します。')
+      setBgError('背景の処理に失敗しました。元の画像のまま使用します。')
       setWorkingImage(sourceImage)
       setBgColor(null)
     } finally {
