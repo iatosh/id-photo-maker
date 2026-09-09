@@ -1,7 +1,10 @@
 // MediaPipe Face Landmarker で顔の位置を検出する。
 // 本体は import() で遅延ロードし、使わないユーザーのバンドルサイズに影響させない。
 
-export type FaceBox = { crownY: number; chinY: number; centerX: number }
+/** 美肌加工などで顔領域だけに効果を掛けるための楕円（元画像px座標） */
+export type FaceRegion = { centerX: number; centerY: number; radiusX: number; radiusY: number }
+
+export type FaceBox = { crownY: number; chinY: number; centerX: number; region: FaceRegion }
 
 // npm の @mediapipe/tasks-vision と同じバージョンの wasm を指定すること。
 // JSグルーコードとwasmバイナリのバージョンがずれると検出が無言で失敗する。
@@ -52,5 +55,33 @@ export async function detectFaceBox(image: HTMLImageElement): Promise<FaceBox | 
     crownY: chinY - (chinY - glabellaY) * CROWN_RATIO,
     chinY,
     centerX: ((glabella.x + chin.x) / 2) * w,
+    region: computeFaceRegion(landmarks, w, h),
+  }
+}
+
+// biome-ignore lint: 型は動的importでしか手に入らないため any 経由にする
+function computeFaceRegion(landmarks: any[], w: number, h: number): FaceRegion {
+  // 特定のインデックスの並び順に依存しない、全ランドマークのbounding boxから
+  // 楕円を作る。Face Mesh は生え際〜顎・頬〜頬をおおむね覆うので、
+  // 美肌加工（明るさ・なめらかさ）を掛ける対象として妥当な範囲になる。
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  for (const lm of landmarks) {
+    const px = lm.x * w
+    const py = lm.y * h
+    if (px < minX) minX = px
+    if (px > maxX) maxX = px
+    if (py < minY) minY = py
+    if (py > maxY) maxY = py
+  }
+
+  const EXPAND = 1.15 // 頬・顎の縁までしっかり覆うための余裕
+  return {
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+    radiusX: ((maxX - minX) / 2) * EXPAND,
+    radiusY: ((maxY - minY) / 2) * EXPAND,
   }
 }

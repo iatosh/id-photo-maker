@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import type { Area, Point } from 'react-easy-crop'
-import { BackgroundPanel } from '@/components/BackgroundPanel'
 import { Button } from '@/components/ui/button'
 import { Controls } from '@/components/Controls'
 import { CropPane } from '@/components/CropPane'
 import { ImageUpload } from '@/components/ImageUpload'
+import { RetouchPanel } from '@/components/RetouchPanel'
 import { Sheet } from '@/components/Sheet'
-import { replaceBackground } from '@/lib/background'
 import { type FaceBox, detectFaceBox } from '@/lib/faceDetect'
 import { CUSTOM_PRESET_ID, PRESETS, type Preset, autoCropBox } from '@/lib/layout'
 import { bitmapToImage, type CroppedAreaPixels, loadImageBitmap } from '@/lib/render'
+import { applyRetouch } from '@/lib/retouch'
 
 const DEFAULT_CUSTOM: Preset = {
   id: CUSTOM_PRESET_ID,
@@ -21,8 +21,8 @@ const DEFAULT_CUSTOM: Preset = {
 }
 
 function App() {
-  // sourceImage: アップロードされたまま(EXIF補正のみ)、常に不変。顔検出/背景検出の入力に使う
-  // workingImage: 実際にクロップ/プレビューへ渡す画像。背景色を変えるとこちらだけ差し替わる
+  // sourceImage: アップロードされたまま(EXIF補正のみ)、常に不変。顔検出の入力に使う
+  // workingImage: 実際にクロップ/プレビューへ渡す画像。美肌加工を変えるとこちらだけ差し替わる
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null)
   const [workingImage, setWorkingImage] = useState<HTMLImageElement | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -43,9 +43,10 @@ function App() {
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
 
-  const [bgColor, setBgColor] = useState<string | null>(null)
-  const [bgProcessing, setBgProcessing] = useState(false)
-  const [bgError, setBgError] = useState<string | null>(null)
+  const [retouchSmooth, setRetouchSmooth] = useState(0)
+  const [retouchBrighten, setRetouchBrighten] = useState(0)
+  const [retouchProcessing, setRetouchProcessing] = useState(false)
+  const [retouchError, setRetouchError] = useState<string | null>(null)
 
   const preset: Preset =
     presetId === CUSTOM_PRESET_ID
@@ -61,14 +62,15 @@ function App() {
   const handleSelect = async (file: File) => {
     setError(null)
     setDetectError(null)
-    setBgError(null)
+    setRetouchError(null)
     try {
       const bitmap = await loadImageBitmap(file)
       const img = await bitmapToImage(bitmap)
       setSourceImage(img)
       setWorkingImage(img)
-      setBgColor(null)
       setFaceBox(null)
+      setRetouchSmooth(0)
+      setRetouchBrighten(0)
       setCrop({ x: 0, y: 0 })
       setZoom(1)
       setRotation(0)
@@ -133,28 +135,41 @@ function App() {
     }
   }
 
-  const handleBgColorChange = async (color: string | null) => {
+  const handleRetouchCommit = async (smooth: number, brighten: number) => {
     if (!sourceImage) return
-    setBgError(null)
+    setRetouchSmooth(smooth)
+    setRetouchBrighten(brighten)
+    setRetouchError(null)
 
-    if (color === null) {
+    if (smooth === 0 && brighten === 0) {
       setWorkingImage(sourceImage)
-      setBgColor(null)
       return
     }
 
-    setBgProcessing(true)
+    setRetouchProcessing(true)
     try {
-      const replaced = await replaceBackground(sourceImage, color)
-      // 画像サイズ(px)は元と同じなので crop/zoom/rotation はリセット不要
-      setWorkingImage(replaced)
-      setBgColor(color)
+      // 自動配置ですでに顔検出済みならそれを使い回す。未検出ならここで検出する
+      let face = faceBox
+      if (!face) {
+        face = await detectFaceBox(sourceImage)
+        if (!face) {
+          setRetouchError('顔を検出できませんでした。美肌加工は適用できません。')
+          setWorkingImage(sourceImage)
+          return
+        }
+        setFaceBox(face)
+      }
+      // 常に sourceImage から作り直す（workingImage に重ね掛けしない）
+      const result = await applyRetouch(sourceImage, face.region, {
+        smooth: smooth / 100,
+        brighten: brighten / 100,
+      })
+      setWorkingImage(result)
     } catch {
-      setBgError('背景の処理に失敗しました。元の画像のまま使用します。')
+      setRetouchError('美肌加工に失敗しました。元の画像のまま使用します。')
       setWorkingImage(sourceImage)
-      setBgColor(null)
     } finally {
-      setBgProcessing(false)
+      setRetouchProcessing(false)
     }
   }
 
@@ -214,11 +229,12 @@ function App() {
               preset={preset}
               cropWidthPx={croppedAreaPixels?.width ?? null}
             />
-            <BackgroundPanel
-              color={bgColor}
-              onColorChange={handleBgColorChange}
-              processing={bgProcessing}
-              error={bgError}
+            <RetouchPanel
+              smooth={retouchSmooth}
+              brighten={retouchBrighten}
+              onCommit={handleRetouchCommit}
+              processing={retouchProcessing}
+              error={retouchError}
             />
             <Sheet image={workingImage} croppedAreaPixels={croppedAreaPixels} rotation={rotation} preset={preset} />
           </div>
