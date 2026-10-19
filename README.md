@@ -4,7 +4,7 @@
 コンビニのマルチコピー機における **L判プリント**（89×127mm・写真用紙・約30円）のサイズで作成されます。
 すべてブラウザ内の処理で完結します。
 
-<img width="800" height="608" alt="Demo" src="https://github.com/user-attachments/assets/49759fd9-a582-44c1-a329-ffe5dde0899f" />
+<img width="720" height="497" alt="Demo" src="https://github.com/user-attachments/assets/a44a22cd-c736-499f-a132-4cc275af29aa" />
 
 ## Features
 
