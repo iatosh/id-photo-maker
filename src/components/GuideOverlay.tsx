@@ -16,11 +16,11 @@ export function GuideOverlay({ top, chin }: Props) {
     <div className="pointer-events-none absolute inset-0 z-10">
       <div className="absolute inset-x-0" style={{ top: `${top * 100}%` }}>
         <div className="border-t border-dashed border-emerald-400" />
-        <span className="absolute left-1 -top-4 text-[10px] text-emerald-400">頭頂</span>
+        <span className="absolute -top-4 left-1 rounded-sm bg-emerald-500/90 px-1 text-[10px] leading-4 text-white">頭頂</span>
       </div>
       <div className="absolute inset-x-0" style={{ top: `${chin * 100}%` }}>
         <div className="border-t border-dashed border-emerald-400" />
-        <span className="absolute left-1 top-1 text-[10px] text-emerald-400">顎</span>
+        <span className="absolute top-0.5 left-1 rounded-sm bg-emerald-500/90 px-1 text-[10px] leading-4 text-white">顎</span>
       </div>
       <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-emerald-400/60" />
     </div>

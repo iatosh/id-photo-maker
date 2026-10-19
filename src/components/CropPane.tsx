@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import Cropper, { type Area, type Point, type Size } from 'react-easy-crop'
 import { GuideOverlay } from '@/components/GuideOverlay'
 import { type Preset, guideRatios } from '@/lib/layout'
@@ -41,6 +41,8 @@ export function CropPane({
 }: Props) {
   const { top, chin } = guideRatios(preset)
   const interactingRef = useRef(false)
+  // 三分割グリッドは画像を直接ドラッグ・ズームしている間だけ出す（常時だとガイド線と紛らわしい）
+  const [interacting, setInteracting] = useState(false)
   const latestAreaRef = useRef<Area | null>(null)
 
   // onCropComplete は crop prop だけが変わったとき（X/Y スライダー）に呼ばれないので
@@ -72,11 +74,14 @@ export function CropPane({
         onRotationChange={onRotationChange}
         onCropAreaChange={handleCropAreaChange}
         onCropSizeChange={onCropSizeChange}
+        showGrid={interacting}
         onInteractionStart={() => {
           interactingRef.current = true
+          setInteracting(true)
         }}
         onInteractionEnd={() => {
           interactingRef.current = false
+          setInteracting(false)
           if (latestAreaRef.current) onCropComplete(latestAreaRef.current)
         }}
       />

@@ -2,7 +2,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
-import { CUSTOM_PRESET_ID, PRESETS, type Pan, type Preset, requiredPx } from '@/lib/layout'
+import { CUSTOM_PRESET_ID, PRESETS, type Pan, type Preset } from '@/lib/layout'
 
 const ZOOM_DEFAULT = 1
 const ROTATION_DEFAULT = 0
@@ -99,7 +99,6 @@ type Props = {
   panRange: Pan | null
   onPanChange: (axis: 'x' | 'y', value: number) => void
   preset: Preset
-  cropWidthPx: number | null
 }
 
 export function Controls({
@@ -116,10 +115,7 @@ export function Controls({
   panRange,
   onPanChange,
   preset,
-  cropWidthPx,
 }: Props) {
-  const needed = requiredPx(preset)
-  const lowRes = cropWidthPx != null && cropWidthPx < needed.w
   // 刻みの倍数に切り下げて 0 がちょうど刻み上に来るようにする（ドラッグで既定値に戻せる）
   const panMax = (range: number | undefined) => Math.floor((range ?? 0) / PAN_STEP + 1e-9) * PAN_STEP
   const panMaxX = panMax(panRange?.x)
@@ -211,12 +207,6 @@ export function Controls({
         format={(v) => signed(v, 0, '°')}
         onChange={onRotationChange}
       />
-
-      {lowRes && (
-        <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          解像度がやや低めです（推奨 {needed.w}×{needed.h}px 以上）。印刷が粗くなる場合があります。
-        </p>
-      )}
     </div>
   )
 }

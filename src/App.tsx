@@ -227,7 +227,6 @@ function App() {
               panRange={panRange}
               onPanChange={handlePanChange}
               preset={preset}
-              cropWidthPx={croppedAreaPixels?.width ?? null}
             />
             <Sheet image={image} croppedAreaPixels={croppedAreaPixels} rotation={rotation} preset={preset} />
           </div>
