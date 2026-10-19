@@ -58,7 +58,7 @@ function AdjustSlider({ label, value, defaultValue, min, max, step, format, onCh
           max={disabled ? 1 : max}
           step={step}
           // 既定値が中央にある両方向スライダー（回転・X・Y）は塗りを既定値から伸ばす
-          origin={defaultValue > min ? defaultValue : undefined}
+          origin={disabled || defaultValue > min ? defaultValue : undefined}
           disabled={disabled}
           value={[disabled ? 0 : clamped]}
           onValueChange={([v]) => onChange(v)}
