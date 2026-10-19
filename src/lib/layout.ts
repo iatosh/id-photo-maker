@@ -8,6 +8,8 @@ export const DPI = 600
 export const MARGIN_MM = 3
 /** 写真同士の隙間。ハサミで切る余裕（刃を入れる幅）として確保する */
 export const GAP_MM = 2
+/** 写真の四隅から外へ伸ばすトンボ（切り取り目印）の長さ。隙間・余白の幅で頭打ちになる */
+export const CROP_MARK_MM = 2
 
 // L判 89 x 127mm
 export const SHEET_W_MM = 89
@@ -268,4 +270,39 @@ export function computeTiling(
     originX: Math.round((canvasW - gridW) / 2),
     originY: Math.round((canvasH - gridH) / 2),
   }
+}
+
+export type Segment = { x1: number; y1: number; x2: number; y2: number }
+
+/**
+ * 各写真の四隅から、辺の延長線上を外向きに伸ばすトンボ（切り取り目印）。
+ * 写真の内側には一切掛からず、隙間・余白の中だけに引く。
+ * 隣り合う写真は辺がそろっているので、隙間の中では両側の目印がつながって1本の短い線になる。
+ */
+export function cropMarkSegments(tiling: Tiling, markPx = mmToPx(CROP_MARK_MM)): Segment[] {
+  const segments: Segment[] = []
+  const gridRight = tiling.originX + tiling.cols * tiling.cellW + (tiling.cols - 1) * tiling.gap
+  const gridBottom = tiling.originY + tiling.rows * tiling.cellH + (tiling.rows - 1) * tiling.gap
+
+  for (let row = 0; row < tiling.rows; row++) {
+    for (let col = 0; col < tiling.cols; col++) {
+      const x0 = tiling.originX + col * (tiling.cellW + tiling.gap)
+      const y0 = tiling.originY + row * (tiling.cellH + tiling.gap)
+      const x1 = x0 + tiling.cellW
+      const y1 = y0 + tiling.cellH
+      // 外向きに使える幅: 内側なら隙間、外周なら台紙の端まで
+      const left = Math.min(markPx, col > 0 ? tiling.gap : x0)
+      const right = Math.min(markPx, col < tiling.cols - 1 ? tiling.gap : tiling.canvasW - gridRight)
+      const up = Math.min(markPx, row > 0 ? tiling.gap : y0)
+      const down = Math.min(markPx, row < tiling.rows - 1 ? tiling.gap : tiling.canvasH - gridBottom)
+
+      for (const y of [y0, y1]) {
+        segments.push({ x1: x0 - left, y1: y, x2: x0, y2: y }, { x1: x1, y1: y, x2: x1 + right, y2: y })
+      }
+      for (const x of [x0, x1]) {
+        segments.push({ x1: x, y1: y0 - up, x2: x, y2: y0 }, { x1: x, y1: y1, x2: x, y2: y1 + down })
+      }
+    }
+  }
+  return segments
 }

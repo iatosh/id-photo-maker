@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { PRESETS, autoCropBox, computeTiling, guideRatios, mmToPx, clampPan, coverZoom, panExtent, panInterval, panLimits } from './layout'
+import {
+  PRESETS,
+  autoCropBox,
+  computeTiling,
+  cropMarkSegments,
+  guideRatios,
+  mmToPx,
+  clampPan,
+  coverZoom,
+  panExtent,
+  panInterval,
+  panLimits,
+} from './layout'
 
 describe('mmToPx', () => {
   it('L判の寸法を600dpiでpxに変換する', () => {
@@ -176,4 +188,35 @@ describe('panLimits / clampPan / panInterval', () => {
     const [, hi] = panInterval(l, 'x', pan.y)
     expect(clampPan({ x: hi, y: pan.y }, l).x).toBeCloseTo(hi)
   })
+})
+
+describe('cropMarkSegments', () => {
+  for (const preset of PRESETS) {
+    it(`${preset.label}: 写真1枚につき四隅×2本、どれも写真の内側に入らない`, () => {
+      const t = computeTiling(preset)
+      const segs = cropMarkSegments(t)
+      expect(segs).toHaveLength(t.count * 8)
+
+      for (const s of segs) {
+        // 長さがあり、台紙からはみ出さない
+        expect(Math.hypot(s.x2 - s.x1, s.y2 - s.y1)).toBeGreaterThan(0)
+        for (const x of [s.x1, s.x2]) expect(x).toBeGreaterThanOrEqual(0)
+        for (const x of [s.x1, s.x2]) expect(x).toBeLessThanOrEqual(t.canvasW)
+        for (const y of [s.y1, s.y2]) expect(y).toBeGreaterThanOrEqual(0)
+        for (const y of [s.y1, s.y2]) expect(y).toBeLessThanOrEqual(t.canvasH)
+
+        // 線分の中点がどの写真の内部（境界を除く）にも入らない
+        const mx = (s.x1 + s.x2) / 2
+        const my = (s.y1 + s.y2) / 2
+        for (let row = 0; row < t.rows; row++) {
+          for (let col = 0; col < t.cols; col++) {
+            const x0 = t.originX + col * (t.cellW + t.gap)
+            const y0 = t.originY + row * (t.cellH + t.gap)
+            const inside = mx > x0 && mx < x0 + t.cellW && my > y0 && my < y0 + t.cellH
+            expect(inside).toBe(false)
+          }
+        }
+      }
+    })
+  }
 })

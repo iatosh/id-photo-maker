@@ -1,4 +1,4 @@
-import { type Preset, computeTiling, rotatedBoundingBoxSize } from './layout'
+import { type Preset, computeTiling, cropMarkSegments, mmToPx, rotatedBoundingBoxSize } from './layout'
 
 export type CroppedAreaPixels = { x: number; y: number; width: number; height: number }
 
@@ -46,7 +46,7 @@ export function renderSheet(
     }
   }
 
-  drawCutLines(ctx, tiling)
+  drawCropMarks(ctx, tiling)
 
   return canvas
 }
@@ -70,30 +70,18 @@ function rotateToBoundingBox(image: HTMLImageElement, rotationDeg: number): HTML
   return canvas
 }
 
-function drawCutLines(ctx: CanvasRenderingContext2D, tiling: ReturnType<typeof computeTiling>) {
-  const gridW = tiling.cols * tiling.cellW + (tiling.cols - 1) * tiling.gap
-  const gridH = tiling.rows * tiling.cellH + (tiling.rows - 1) * tiling.gap
-
+function drawCropMarks(ctx: CanvasRenderingContext2D, tiling: ReturnType<typeof computeTiling>) {
   ctx.save()
-  ctx.strokeStyle = '#999'
-  ctx.lineWidth = 1
-  ctx.setLineDash([4, 3])
-
-  // 隙間(gap)の中央にハサミガイド線を引く。写真本体には掛からない
-  for (let col = 1; col < tiling.cols; col++) {
-    const x = tiling.originX + col * tiling.cellW + (col - 1 + 0.5) * tiling.gap + 0.5
-    ctx.beginPath()
-    ctx.moveTo(x, tiling.originY)
-    ctx.lineTo(x, tiling.originY + gridH)
-    ctx.stroke()
+  ctx.strokeStyle = '#444'
+  // 600dpi の 1px（0.04mm）では印刷で消えるので、0.1mm 程度の太さにする
+  ctx.lineWidth = Math.max(1, mmToPx(0.1))
+  ctx.lineCap = 'butt'
+  ctx.beginPath()
+  for (const s of cropMarkSegments(tiling)) {
+    ctx.moveTo(s.x1, s.y1)
+    ctx.lineTo(s.x2, s.y2)
   }
-  for (let row = 1; row < tiling.rows; row++) {
-    const y = tiling.originY + row * tiling.cellH + (row - 1 + 0.5) * tiling.gap + 0.5
-    ctx.beginPath()
-    ctx.moveTo(tiling.originX, y)
-    ctx.lineTo(tiling.originX + gridW, y)
-    ctx.stroke()
-  }
+  ctx.stroke()
   ctx.restore()
 }
 
