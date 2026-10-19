@@ -4,12 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Controls } from '@/components/Controls'
 import { CropPane } from '@/components/CropPane'
 import { ImageUpload } from '@/components/ImageUpload'
-import { RetouchPanel } from '@/components/RetouchPanel'
 import { Sheet } from '@/components/Sheet'
 import { type FaceBox, detectFaceBox } from '@/lib/faceDetect'
 import { CUSTOM_PRESET_ID, PRESETS, type Preset, autoCropBox } from '@/lib/layout'
 import { bitmapToImage, type CroppedAreaPixels, loadImageBitmap } from '@/lib/render'
-import { applyRetouch } from '@/lib/retouch'
 
 const DEFAULT_CUSTOM: Preset = {
   id: CUSTOM_PRESET_ID,
@@ -21,10 +19,8 @@ const DEFAULT_CUSTOM: Preset = {
 }
 
 function App() {
-  // sourceImage: アップロードされたまま(EXIF補正のみ)、常に不変。顔検出の入力に使う
-  // workingImage: 実際にクロップ/プレビューへ渡す画像。美肌加工を変えるとこちらだけ差し替わる
-  const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null)
-  const [workingImage, setWorkingImage] = useState<HTMLImageElement | null>(null)
+  // 画像はアップロードされたまま(EXIF補正のみ)、常に不変。クロップ・顔検出の入力に使う
+  const [image, setImage] = useState<HTMLImageElement | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const [presetId, setPresetId] = useState(PRESETS[0].id)
@@ -43,11 +39,6 @@ function App() {
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
 
-  const [retouchSmooth, setRetouchSmooth] = useState(0)
-  const [retouchBrighten, setRetouchBrighten] = useState(0)
-  const [retouchProcessing, setRetouchProcessing] = useState(false)
-  const [retouchError, setRetouchError] = useState<string | null>(null)
-
   const preset: Preset =
     presetId === CUSTOM_PRESET_ID
       ? {
@@ -62,15 +53,11 @@ function App() {
   const handleSelect = async (file: File) => {
     setError(null)
     setDetectError(null)
-    setRetouchError(null)
     try {
       const bitmap = await loadImageBitmap(file)
       const img = await bitmapToImage(bitmap)
-      setSourceImage(img)
-      setWorkingImage(img)
+      setImage(img)
       setFaceBox(null)
-      setRetouchSmooth(0)
-      setRetouchBrighten(0)
       setCrop({ x: 0, y: 0 })
       setZoom(1)
       setRotation(0)
@@ -96,8 +83,8 @@ function App() {
         : (PRESETS.find((p) => p.id === id) ?? PRESETS[0])
 
     // 顔検出済みなら新しい規格でも自動配置を引き継ぐ
-    if (faceBox && sourceImage) {
-      const box = autoCropBox(faceBox, nextPreset, sourceImage.naturalWidth, sourceImage.naturalHeight)
+    if (faceBox && image) {
+      const box = autoCropBox(faceBox, nextPreset, image.naturalWidth, image.naturalHeight)
       setInitialCrop(box)
       setDetectError(
         box.fits ? null : '顔が大きく、この規格が求める余白を完全には確保できませんでした。手動で調整してください。',
@@ -112,17 +99,17 @@ function App() {
   }
 
   const handleAutoCrop = async () => {
-    if (!sourceImage) return
+    if (!image) return
     setDetecting(true)
     setDetectError(null)
     try {
-      const face = await detectFaceBox(sourceImage)
+      const face = await detectFaceBox(image)
       if (!face) {
         setDetectError('顔を検出できませんでした。手動で調整してください。')
         return
       }
       setFaceBox(face)
-      const box = autoCropBox(face, preset, sourceImage.naturalWidth, sourceImage.naturalHeight)
+      const box = autoCropBox(face, preset, image.naturalWidth, image.naturalHeight)
       setInitialCrop(box)
       setDetectError(
         box.fits ? null : '顔が大きく、この規格が求める余白を完全には確保できませんでした。手動で調整してください。',
@@ -132,44 +119,6 @@ function App() {
       setDetectError('顔検出に失敗しました（通信環境をご確認ください）。手動で調整してください。')
     } finally {
       setDetecting(false)
-    }
-  }
-
-  const handleRetouchCommit = async (smooth: number, brighten: number) => {
-    if (!sourceImage) return
-    setRetouchSmooth(smooth)
-    setRetouchBrighten(brighten)
-    setRetouchError(null)
-
-    if (smooth === 0 && brighten === 0) {
-      setWorkingImage(sourceImage)
-      return
-    }
-
-    setRetouchProcessing(true)
-    try {
-      // 自動配置ですでに顔検出済みならそれを使い回す。未検出ならここで検出する
-      let face = faceBox
-      if (!face) {
-        face = await detectFaceBox(sourceImage)
-        if (!face) {
-          setRetouchError('顔を検出できませんでした。美肌加工は適用できません。')
-          setWorkingImage(sourceImage)
-          return
-        }
-        setFaceBox(face)
-      }
-      // 常に sourceImage から作り直す（workingImage に重ね掛けしない）
-      const result = await applyRetouch(sourceImage, face.region, {
-        smooth: smooth / 100,
-        brighten: brighten / 100,
-      })
-      setWorkingImage(result)
-    } catch {
-      setRetouchError('美肌加工に失敗しました。元の画像のまま使用します。')
-      setWorkingImage(sourceImage)
-    } finally {
-      setRetouchProcessing(false)
     }
   }
 
@@ -188,13 +137,13 @@ function App() {
         </p>
       )}
 
-      {!workingImage ? (
+      {!image ? (
         <ImageUpload onSelect={handleSelect} />
       ) : (
         <div className="grid gap-8 md:grid-cols-2">
           <div className="flex flex-col items-center gap-3">
             <CropPane
-              imageSrc={workingImage.src}
+              imageSrc={image.src}
               preset={preset}
               crop={crop}
               zoom={zoom}
@@ -212,7 +161,8 @@ function App() {
               </Button>
               {detectError && <p className="text-xs text-amber-700 dark:text-amber-400">{detectError}</p>}
             </div>
-            <ImageUpload onSelect={handleSelect} />
+            {/* 差し替え用。写真1枚で作るツールなので、複数枚作れそうに見える大きなドロップボックスは使わない */}
+            <ImageUpload compact onSelect={handleSelect} />
           </div>
 
           <div className="flex flex-col gap-8">
@@ -229,14 +179,7 @@ function App() {
               preset={preset}
               cropWidthPx={croppedAreaPixels?.width ?? null}
             />
-            <RetouchPanel
-              smooth={retouchSmooth}
-              brighten={retouchBrighten}
-              onCommit={handleRetouchCommit}
-              processing={retouchProcessing}
-              error={retouchError}
-            />
-            <Sheet image={workingImage} croppedAreaPixels={croppedAreaPixels} rotation={rotation} preset={preset} />
+            <Sheet image={image} croppedAreaPixels={croppedAreaPixels} rotation={rotation} preset={preset} />
           </div>
         </div>
       )}
