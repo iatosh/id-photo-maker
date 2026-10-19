@@ -71,6 +71,93 @@ export function rotatedBoundingBoxSize(
   }
 }
 
+// ---- 拡大・回転・位置の制約 ----
+// react-easy-crop（objectFit="cover"）の表示を、クロップ枠の幅 = preset.w mm の単位系で扱う。
+// 位置(pan)は react-easy-crop の crop と同じ向き: 正で画像が右・下へ動く。
+// 回転も同じく CSS rotate() の向き（正で時計回り）。
+
+/** 拡大1倍(cover)のときの画像の表示サイズ(mm) */
+function coverMediaMm(preset: Preset, imageAspect: number): { w: number; h: number } {
+  const aspect = preset.w / preset.h
+  // 枠より横長の画像は高さを、縦長の画像は幅を枠に合わせる（react-easy-crop の cover 判定と同じ）
+  return imageAspect > aspect
+    ? { w: preset.h * imageAspect, h: preset.h }
+    : { w: preset.w, h: preset.w / imageAspect }
+}
+
+/** 枠を画像の軸に沿って見たときの外接サイズ(mm)。回転すると枠の角が画像の外にはみ出す分だけ大きくなる */
+function frameExtentMm(preset: Preset, rotationDeg: number): { w: number; h: number } {
+  const rad = (rotationDeg * Math.PI) / 180
+  const c = Math.abs(Math.cos(rad))
+  const s = Math.abs(Math.sin(rad))
+  return { w: c * preset.w + s * preset.h, h: s * preset.w + c * preset.h }
+}
+
+/**
+ * 回転しても枠の四隅に画像の外（余白）が出ないための最小倍率（cover 基準、回転0なら1）。
+ * 一般的な画像編集ツールと同じく、回転に合わせて自動で拡大させるのに使う。
+ */
+export function coverZoom(preset: Preset, imageAspect: number, rotationDeg: number): number {
+  const media = coverMediaMm(preset, imageAspect)
+  const frame = frameExtentMm(preset, rotationDeg)
+  return Math.max(1, frame.w / media.w, frame.h / media.h)
+}
+
+export type Pan = { x: number; y: number }
+
+/** 位置の可動域。画像の軸方向(u, v)それぞれに ±u, ±v mm まで動かせる（回転した長方形の領域） */
+export type PanLimits = { cos: number; sin: number; u: number; v: number }
+
+/** zoom は react-easy-crop に渡す実倍率（coverZoom を掛けた後の値） */
+export function panLimits(preset: Preset, imageAspect: number, zoom: number, rotationDeg: number): PanLimits {
+  const rad = (rotationDeg * Math.PI) / 180
+  const media = coverMediaMm(preset, imageAspect)
+  const frame = frameExtentMm(preset, rotationDeg)
+  return {
+    cos: Math.cos(rad),
+    sin: Math.sin(rad),
+    u: Math.max(0, (media.w * zoom - frame.w) / 2),
+    v: Math.max(0, (media.h * zoom - frame.h) / 2),
+  }
+}
+
+/** 枠が画像からはみ出さない位置に収める（画像の軸方向で clamp = 可動域への最近点） */
+export function clampPan(pan: Pan, l: PanLimits): Pan {
+  const clamp = (v: number, r: number) => Math.min(r, Math.max(-r, v))
+  const u = clamp(l.cos * pan.x + l.sin * pan.y, l.u)
+  const v = clamp(-l.sin * pan.x + l.cos * pan.y, l.v)
+  return { x: l.cos * u - l.sin * v, y: l.sin * u + l.cos * v }
+}
+
+/** X/Y それぞれが取りうる最大の範囲（±mm）。回転していなければ u, v そのもの */
+export function panExtent(l: PanLimits): Pan {
+  const c = Math.abs(l.cos)
+  const s = Math.abs(l.sin)
+  return { x: c * l.u + s * l.v, y: s * l.u + c * l.v }
+}
+
+/**
+ * もう一方の軸を固定したときに、この軸を動かせる範囲 [min, max]。
+ * 回転0なら ±一定、回転していると相手の軸の値によって範囲がずれる。
+ */
+export function panInterval(l: PanLimits, axis: 'x' | 'y', other: number): [number, number] {
+  // |a·t + b·other| <= r を t について解いた区間
+  const solve = (a: number, b: number, r: number): [number, number] => {
+    if (Math.abs(a) < 1e-9) return [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
+    const p = (-r - b * other) / a
+    const q = (r - b * other) / a
+    return p < q ? [p, q] : [q, p]
+  }
+  // u = cos·x + sin·y, v = -sin·x + cos·y
+  const [a1, b1, a2, b2] = axis === 'x' ? [l.cos, l.sin, -l.sin, l.cos] : [l.sin, l.cos, l.cos, -l.sin]
+  const [lo1, hi1] = solve(a1, b1, l.u)
+  const [lo2, hi2] = solve(a2, b2, l.v)
+  const lo = Math.max(lo1, lo2)
+  const hi = Math.min(hi1, hi2)
+  // other が可動域の外（丸め誤差など）なら幅0にする
+  return lo <= hi ? [lo, hi] : [(lo + hi) / 2, (lo + hi) / 2]
+}
+
 export type CropBox = { x: number; y: number; width: number; height: number }
 
 /**

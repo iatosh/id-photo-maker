@@ -2,10 +2,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
-import { CUSTOM_PRESET_ID, PRESETS, type Preset, requiredPx } from '@/lib/layout'
+import { CUSTOM_PRESET_ID, PRESETS, type Pan, type Preset, requiredPx } from '@/lib/layout'
 
 const ZOOM_DEFAULT = 1
 const ROTATION_DEFAULT = 0
+const PAN_DEFAULT = 0
+const PAN_STEP = 0.1
 // slider.tsx のつまみ(size-4)。Radix はつまみがトラックからはみ出さないよう端で内側へ寄せるので、
 // 既定値マーカーもこの分だけ内側に置かないとつまみの中心とずれる
 const THUMB_PX = 16
@@ -33,7 +35,7 @@ type AdjustSliderProps = {
  * 既定値から動かすとバーの下の既定位置に点が出て、クリックで戻る。つまみのダブルクリックでも戻る。
  */
 function AdjustSlider({ label, value, defaultValue, min, max, step, format, onChange }: AdjustSliderProps) {
-  // 動かせる幅がない。min === max だと Radix が NaN% を出すので無効化して中央に置く
+  // 動かせる幅がない（例: 拡大1倍で枠と同じ向きの X）。min === max だと Radix が NaN% を出すので無効化して中央に置く
   const disabled = max - min < step
   const clamped = Math.min(max, Math.max(min, value))
   const moved = Math.abs(value - defaultValue) > step / 2
@@ -55,7 +57,7 @@ function AdjustSlider({ label, value, defaultValue, min, max, step, format, onCh
           min={disabled ? -1 : min}
           max={disabled ? 1 : max}
           step={step}
-          // 既定値が中央にある両方向スライダー（回転など）は塗りを既定値から伸ばす
+          // 既定値が中央にある両方向スライダー（回転・X・Y）は塗りを既定値から伸ばす
           origin={defaultValue > min ? defaultValue : undefined}
           disabled={disabled}
           value={[disabled ? 0 : clamped]}
@@ -91,6 +93,11 @@ type Props = {
   onZoomChange: (zoom: number) => void
   rotation: number
   onRotationChange: (rotation: number) => void
+  /** 仕上がり写真上の mm。正で画像が右・下へ */
+  pan: Pan
+  /** X/Y それぞれ ±この mm まで動かせる。枠サイズ未確定の間は null */
+  panRange: Pan | null
+  onPanChange: (axis: 'x' | 'y', value: number) => void
   preset: Preset
   cropWidthPx: number | null
 }
@@ -105,11 +112,19 @@ export function Controls({
   onZoomChange,
   rotation,
   onRotationChange,
+  pan,
+  panRange,
+  onPanChange,
   preset,
   cropWidthPx,
 }: Props) {
   const needed = requiredPx(preset)
   const lowRes = cropWidthPx != null && cropWidthPx < needed.w
+  // 刻みの倍数に切り下げて 0 がちょうど刻み上に来るようにする（ドラッグで既定値に戻せる）
+  const panMax = (range: number | undefined) => Math.floor((range ?? 0) / PAN_STEP + 1e-9) * PAN_STEP
+  const panMaxX = panMax(panRange?.x)
+  const panMaxY = panMax(panRange?.y)
+  const formatMm = (v: number) => signed(v, 1, ' mm')
 
   return (
     <div className="flex flex-col gap-6">
@@ -156,6 +171,26 @@ export function Controls({
         </div>
       )}
 
+      <AdjustSlider
+        label="X"
+        value={pan.x}
+        defaultValue={PAN_DEFAULT}
+        min={-panMaxX}
+        max={panMaxX}
+        step={PAN_STEP}
+        format={formatMm}
+        onChange={(x) => onPanChange('x', x)}
+      />
+      <AdjustSlider
+        label="Y"
+        value={pan.y}
+        defaultValue={PAN_DEFAULT}
+        min={-panMaxY}
+        max={panMaxY}
+        step={PAN_STEP}
+        format={formatMm}
+        onChange={(y) => onPanChange('y', y)}
+      />
       <AdjustSlider
         label="拡大"
         value={zoom}
