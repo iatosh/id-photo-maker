@@ -9,9 +9,21 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  origin,
   ...props
-}: React.ComponentProps<typeof SliderPrimitive.Root>) {
+}: React.ComponentProps<typeof SliderPrimitive.Root> & {
+  /** 塗りの起点。回転のように中央が既定値の両方向スライダーで、塗りを min でなくここから伸ばす */
+  origin?: number
+}) {
   const values = value ?? defaultValue ?? [min, max]
+  const toPercent = (v: number) => ((v - min) / (max - min)) * 100
+  const originFill =
+    origin === undefined
+      ? null
+      : {
+          left: `${Math.min(toPercent(origin), toPercent(values[0]))}%`,
+          right: `${100 - Math.max(toPercent(origin), toPercent(values[0]))}%`,
+        }
 
   return (
     <SliderPrimitive.Root
@@ -30,10 +42,14 @@ function Slider({
         data-slot="slider-track"
         className="bg-muted relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5"
       >
-        <SliderPrimitive.Range
-          data-slot="slider-range"
-          className="bg-primary absolute data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
-        />
+        {originFill ? (
+          <div data-slot="slider-range" className="bg-primary absolute h-full" style={originFill} />
+        ) : (
+          <SliderPrimitive.Range
+            data-slot="slider-range"
+            className="bg-primary absolute data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
+          />
+        )}
       </SliderPrimitive.Track>
       {Array.from({ length: values.length }, (_, index) => (
         <SliderPrimitive.Thumb
