@@ -170,7 +170,7 @@ function App() {
       <header>
         <h1 className="text-2xl font-semibold">証明写真メーカー</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          コンビニのマルチコピー機で L判プリントできる証明写真を作ります。
+          コンビニのマルチコピー機でL判プリントできる証明写真を作ります。
         </p>
       </header>
 
