@@ -5,12 +5,14 @@ Browser-only ID photo sheet maker. Output L-size print (89×127mm). UI text Japa
 ## Commands
 
 - `npm run dev` / `npm test` (vitest) / `npm run build` (tsc + vite) / `npm run lint` (oxlint)
-- `npm run deploy`: build, then `wrangler deploy` to Cloudflare Workers.
 - After change: test, build, lint must pass. UI change: verify by hand in browser.
 
 ## Deploy
 
 - Live at https://tools.iatosh.com/id-photo-maker/. Worker `id-photo-maker`, route `tools.iatosh.com/id-photo-maker*` (zone `iatosh.com`). Config in `wrangler.jsonc`.
+- Deploy = Cloudflare Workers Builds, connected in dashboard. Push to `main` deploys. Build command `npm test && npm run build`, deploy command `npx wrangler deploy`. Only `main` builds. No local deploy script on purpose.
+- CI = `.github/workflows/ci.yml` (lint, test, build on push to main and PRs). Runs separately; does not gate deploy.
+- Free plan: static assets only, no Worker script. Adding `main` script or `run_worker_first` makes requests count toward Workers request limit. Avoid unless needed.
 - Workers static assets match full request path, so Vite `base` is `/id-photo-maker/` and `outDir` is `dist/id-photo-maker`, with `assets.directory` = `./dist`. Change path: update all three plus canonical/OG URLs in `index.html` and `public/sitemap.xml`.
 - `workers_dev` and `preview_urls` off so no duplicate copy gets indexed.
 - `compatibility_date` must not be newer than local workerd supports, or `wrangler dev` fails.
