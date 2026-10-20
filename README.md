@@ -4,6 +4,8 @@
 コンビニのマルチコピー機で印刷できる**L判プリント**（89×127mm・写真用紙・約30円）のサイズで作成されます。
 処理はすべてブラウザ内で完結します。
 
+https://tools.iatosh.com/id-photo-maker/ で公開しています。
+
 <p align="center">
   <img width="720" height="497" alt="Demo" src="https://github.com/user-attachments/assets/a44a22cd-c736-499f-a132-4cc275af29aa" />
 </p>
@@ -43,7 +45,7 @@ npm run dev
 
 ```bash
 npm test        # vitest（レイアウト計算の純関数テスト）
-npm run build   # 型チェック + 本番ビルド（dist/ に静的ファイル出力）
+npm run build   # 型チェック + 本番ビルド（dist/id-photo-maker/ に静的ファイル出力）
 npm run lint    # oxlint
 ```
 
