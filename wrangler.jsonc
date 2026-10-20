@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "id-photo-maker",
+  "compatibility_date": "2026-10-01",
+  // dist/id-photo-maker/ がそのまま /id-photo-maker/ として配信される
+  "assets": { "directory": "./dist" },
+  "routes": [{ "pattern": "tools.iatosh.com/id-photo-maker*", "zone_name": "iatosh.com" }],
+  // 検索エンジンに重複して載らないよう、workers.dev とプレビューURLは公開しない
+  "workers_dev": false,
+  "preview_urls": false
+}
