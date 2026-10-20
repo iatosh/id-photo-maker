@@ -29,6 +29,9 @@ const DEFAULT_CUSTOM: Preset = {
   topGap: 4,
 }
 
+const FACE_TOO_LARGE_MESSAGE =
+  '元の写真で顔が大きく写っているため、この規格が求める余白を確保できませんでした。手動で調整してください。'
+
 function App() {
   // 画像はアップロードされたまま(EXIF補正のみ)、常に不変。クロップ・顔検出の入力に使う
   const [image, setImage] = useState<HTMLImageElement | null>(null)
@@ -130,9 +133,7 @@ function App() {
     if (faceBox && image) {
       const box = autoCropBox(faceBox, nextPreset, image.naturalWidth, image.naturalHeight)
       setInitialCrop(box)
-      setDetectError(
-        box.fits ? null : '顔が大きく、この規格が求める余白を完全には確保できませんでした。手動で調整してください。',
-      )
+      setDetectError(box.fits ? null : FACE_TOO_LARGE_MESSAGE)
     } else {
       setInitialCrop(undefined)
       setCrop({ x: 0, y: 0 })
@@ -155,9 +156,7 @@ function App() {
       setFaceBox(face)
       const box = autoCropBox(face, preset, image.naturalWidth, image.naturalHeight)
       setInitialCrop(box)
-      setDetectError(
-        box.fits ? null : '顔が大きく、この規格が求める余白を完全には確保できませんでした。手動で調整してください。',
-      )
+      setDetectError(box.fits ? null : FACE_TOO_LARGE_MESSAGE)
       setCropperResetToken((t) => t + 1)
     } catch {
       setDetectError('顔検出に失敗しました（通信環境をご確認ください）。手動で調整してください。')
@@ -234,7 +233,7 @@ function App() {
       )}
 
       <footer className="text-muted-foreground mt-auto pt-8 text-xs">
-        画像は端末内で処理され、サーバーに送信されません（検出モデルの初回取得のみ通信が発生します）。
+        ファイルはサーバーに送信されず、お使いの端末内でのみ処理されます（顔検出モデルの初回取得のみ通信が発生します）。
       </footer>
     </div>
   )
