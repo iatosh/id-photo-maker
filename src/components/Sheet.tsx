@@ -23,7 +23,8 @@ export function Sheet({ image, croppedAreaPixels, rotation, preset }: Props) {
     if (!image || !croppedAreaPixels || !containerRef.current) return
 
     const canvas = renderSheet(image, croppedAreaPixels, rotation, preset)
-    canvas.className = 'w-full h-auto rounded border'
+    // 横長シートは列幅いっぱい、縦長シートは高さで抑えて縦に伸びすぎないようにする
+    canvas.className = 'mx-auto block h-auto max-h-96 w-auto max-w-full rounded border'
     canvasRef.current = canvas
 
     const container = containerRef.current
@@ -46,7 +47,7 @@ export function Sheet({ image, croppedAreaPixels, rotation, preset }: Props) {
       <p className="text-sm font-medium">
         L判プレビュー（{preset.label} × {tiling.count}枚）
       </p>
-      <div ref={containerRef} className="w-full max-w-xs" />
+      <div ref={containerRef} className="w-full" />
       {/* 拡大スライダーの操作中に出入りするので、上のプレビューを押し下げない位置（保存の直前）に置く */}
       {lowRes && (
         <p className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
