@@ -166,14 +166,8 @@ function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-svh max-w-4xl flex-col gap-8 px-6 py-10">
-      <header>
-        <h1 className="text-2xl font-semibold">証明写真メーカー</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          コンビニのマルチコピー機でL判プリントできる証明写真を作ります。
-        </p>
-      </header>
-
+    // 見出し・使い方・フッターは検索エンジンがJSなしでも読めるよう index.html に静的に置いている
+    <div className="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-8">
       {error && (
         <p className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-900 dark:bg-red-950 dark:text-red-200">
           {error}
@@ -231,10 +225,6 @@ function App() {
           </div>
         </div>
       )}
-
-      <footer className="text-muted-foreground mt-auto pt-8 text-xs">
-        ファイルはサーバーに送信されず、お使いの端末内でのみ処理されます（顔検出モデルの初回取得のみ通信が発生します）。
-      </footer>
     </div>
   )
 }
