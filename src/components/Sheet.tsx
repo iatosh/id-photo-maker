@@ -59,7 +59,7 @@ export function Sheet({ image, croppedAreaPixels, rotation, preset }: Props) {
       </Button>
       <p className="text-muted-foreground text-xs">
         コンビニのマルチコピー機で「写真プリント」→ L判 →
-        <span className="font-medium">ふちなし</span>を選んで印刷してください（30円）。
+        <span className="font-medium">ふちなし</span>を選んで印刷してください（1枚30〜40円）。
       </p>
     </div>
   )
