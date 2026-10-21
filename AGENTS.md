@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Browser-only ID photo sheet maker. Output L-size print (89×127mm). UI text Japanese.
+App name 「5秒で作る証明写真」. Browser-only ID photo sheet maker. "5秒" claim = select photo, auto-place, save without manual tweaks; FAQ states this condition, keep it true. Output L-size print (89×127mm). UI text Japanese.
 
 ## Commands
 
